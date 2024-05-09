@@ -38,7 +38,18 @@ def cal_monthly_tax(month, cum_income, cum_insurance, early_cum_tax, cum_deducti
 
     return tax
 
-def cal_annual_tax(salarys, bonuses=None, insurance_list=None, provient_list=None):
+def cal_monthly_income(salarys: list, bonuses: list, insurance_list: list, provient_list: list):
+    """计算年度的实际到手工资（按年度计算是因为个税按照年度计算）
+
+    Args:
+        salarys (list): 12个月的工资（单位全部为元）
+        bonuses (list): 12个月的奖金
+        insurance_list (list): [社保缴纳基数，养老保险（缴纳比例），医疗保险，失业保险，生育保险，工伤保险]
+        provient_list (list): [公积金缴纳基数，缴纳比例]
+
+    Returns:
+        _type_: _description_
+    """
     
     bonuses = bonuses if bonuses is not None else [0, ] * 12
     assert len(salarys) == len(bonuses) == 12, '工资或奖金数量不为12个月'
@@ -50,12 +61,14 @@ def cal_annual_tax(salarys, bonuses=None, insurance_list=None, provient_list=Non
 
     df['salary'] = salarys
     df['bonus'] = bonuses
+
     df['pension'] = np.array(insurance_base) * insurance_list[1]
     df['medical'] = np.array(insurance_base) * insurance_list[2]
     df['unemployment'] = np.array(insurance_base) * insurance_list[3]
     df['birth'] = np.array(insurance_base) * insurance_list[4]
     df['injury'] = np.array(insurance_base) * insurance_list[5]
     df['provient'] = np.array(provient_base) * provient_list[1]
+
     df['insurance'] = df.loc[:, 'pension': 'provient'].sum(axis=1)
 
     for i in range(1, 13):
@@ -68,25 +81,27 @@ def cal_annual_tax(salarys, bonuses=None, insurance_list=None, provient_list=Non
         
         df.loc[i, 'tax'] = tax
     
-    
     df['actual_income'] = df['salary'] + df['bonus'] - df['insurance'] - df['tax']
 
     return df
      
 
-def cal_annual_spend(spend_df):
-    spend_df = spend_df.applymap(lambda x: x.get())
-    spend_df = spend_df[(spend_df['金额（元）'] != 0) & (spend_df['项目'] != '')]
+def cal_monthly_spend(spend_df):
+    spend_value = spend_df.applymap(lambda x: x.get())
+    spend_value = spend_value[(spend_value['amount'] != 0) & (spend_value['item'] != '')]
 
-    spend_df['频率'] = spend_df['频率'].map({'日': 365, '周': 52, '月': 12, '季': 4, '年': 1})
-    spend_df['年支出'] = spend_df['金额（元）'] * spend_df['频率']
-
-    return spend_df
+    spend_value['freq_nb'] = spend_value['freq'].map({'日': 365, '周': 52, '月': 12, '季': 4, '年': 1})
+    spend_value['annual_outcome'] = spend_value['amount'] * spend_value['freq_nb']
+    monthly_outcome = pd.DataFrame(index=range(1, 13))
+    for idx in spend_value.index:
+        monthly_outcome.loc[:, spend_value.loc[idx, 'item']] = np.ones(12) * spend_value.loc[idx, 'annual_outcome'] / 12
+        
+    return spend_value, monthly_outcome
       
 
 
 if __name__ == '__main__':
-    cal_annual_tax(salarys=[18000]*12, insurance_list=[18000, 0.08, 0.02, 0.005, 0, 0], provient_list=[18000, 0.07])
+    cal_monthly_income(salarys=[18000]*12, insurance_list=[18000, 0.08, 0.02, 0.005, 0, 0], provient_list=[18000, 0.07])
 
     pass
 
